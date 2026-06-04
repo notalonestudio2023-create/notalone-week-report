@@ -1,14 +1,12 @@
-const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY;
+const API_KEY = 'AIzaSyAojmIBZM0IKf7_oAIlwk4Hp3JMKAaX00A';
 const SPREADSHEET_ID = '1QRRjhqy06OvhcJnSS1NYaFFbLHn59vFN35nmIYFY2K0';
-const DRIVE_FOLDER_ID = process.env.REACT_APP_DRIVE_FOLDER_ID;
 
-// 公開讀取 Sheets，不需要登入
 export const initGoogleApi = () => Promise.resolve();
 export const signIn = () => Promise.resolve();
 export const isSignedIn = () => true;
 
 export const getBrandData = async (brandName) => {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(brandName)}!A:Z?key=AIzaSyAojmIBZM0IKf7_oAIlwk4Hp3JMKAaX00A`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(brandName)}!A:Z?key=${API_KEY}`;
   const res = await fetch(url);
   const data = await res.json();
   const rows = data.values;
@@ -21,10 +19,7 @@ export const getBrandData = async (brandName) => {
   });
 };
 
-export const writeRecommendations = async (brandName, weekPeriod, suggestions) => {
-  console.log('寫回功能需要授權，目前略過');
-};
-
+export const writeRecommendations = async () => {};
 export const getBrandFolders = async () => [];
 export const getBrandFiles = async () => [];
 export const fetchAndParseExcel = async () => [];

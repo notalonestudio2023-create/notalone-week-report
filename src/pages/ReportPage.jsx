@@ -23,13 +23,13 @@ export default function ReportPage() {
     getBrandData(brandId).then(data => {
       if (data.length === 0) { setError('尚無週報資料'); setLoading(false); return; }
       setAllData(data);
-      setSelectedWeek(data[data.length - 1]['週期']);
+      setSelectedWeek(data[data.length - 1]['週期開始日']);
       setLoading(false);
     }).catch(e => { setError('資料載入失敗：' + e.message); setLoading(false); });
   }, [brandId]);
 
   const calcGrowth = (field) => {
-    const idx = allData.findIndex(d => d['週期'] === selectedWeek);
+    const idx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
     if (idx <= 0) return 0;
     return (parseInt(allData[idx][field] || 0)) - (parseInt(allData[idx - 1][field] || 0));
   };
@@ -43,7 +43,7 @@ export default function ReportPage() {
   ];
 
   const histChartData = {
-    labels: allData.map(d => d['週期']?.slice(5) || ''),
+    labels: allData.map(d => d['週期開始日']?.slice(5) || ''),
     datasets: AD_SERIES.map(s => ({
       label: s.key, data: allData.map(d => parseFloat(d[`成本_${s.key}`] || 0)),
       borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2,
@@ -67,10 +67,10 @@ export default function ReportPage() {
   if (loading) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">資料載入中...</p></div>;
   if (error) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">{error}</p></div>;
 
-  const currentWeek = allData.find(d => d['週期'] === selectedWeek) || {};
-  const fbGrowth = calcGrowth('FB追蹤');
-  const igGrowth = calcGrowth('IG追蹤');
-  const lineGrowth = calcGrowth('LINE好友');
+  const currentWeek = allData.find(d => d['週期開始日'] === selectedWeek) || {};
+  const fbGrowth = calcGrowth('FB追蹤數');
+  const igGrowth = calcGrowth('IG追蹤數');
+  const lineGrowth = calcGrowth('LINE好友數');
   const totalSpend = 0;
   const totalReach = 0;
   const suggestions = [
@@ -95,9 +95,9 @@ export default function ReportPage() {
         </div>
         <div className="week-selector">
           {allData.map(d => (
-            <button key={d['週期']} className={`week-btn ${d['週期'] === selectedWeek ? 'active' : ''}`}
-              onClick={() => setSelectedWeek(d['週期'])}>
-              {d['週期']?.slice(5)}
+            <button key={d['週期開始日']} className={`week-btn ${d['週期開始日'] === selectedWeek ? 'active' : ''}`}
+              onClick={() => setSelectedWeek(d['週期開始日'])}>
+              {d['週期開始日']?.slice(5)}
             </button>
           ))}
         </div>
@@ -108,9 +108,9 @@ export default function ReportPage() {
           <h2 className="sec-title">集客狀況</h2>
           <div className="metric-grid">
             {[
-              { label: 'Facebook 追蹤', value: parseInt(currentWeek['FB追蹤'] || 0).toLocaleString(), growth: fbGrowth },
-              { label: 'Instagram 追蹤', value: parseInt(currentWeek['IG追蹤'] || 0).toLocaleString(), growth: igGrowth },
-              { label: 'LINE OA 好友', value: parseInt(currentWeek['LINE好友'] || 0).toLocaleString(), growth: lineGrowth }
+              { label: 'Facebook 追蹤', value: parseInt(currentWeek['FB追蹤數'] || 0).toLocaleString(), growth: fbGrowth },
+              { label: 'Instagram 追蹤', value: parseInt(currentWeek['IG追蹤數'] || 0).toLocaleString(), growth: igGrowth },
+              { label: 'LINE OA 好友', value: parseInt(currentWeek['LINE好友數'] || 0).toLocaleString(), growth: lineGrowth }
             ].map(m => (
               <div key={m.label} className="metric-card">
                 <p className="metric-label">{m.label}</p>
