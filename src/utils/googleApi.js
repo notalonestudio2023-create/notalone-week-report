@@ -1,59 +1,17 @@
-const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-const SPREADSHEET_ID = process.env.REACT_APP_SPREADSHEET_ID;
+const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY;
+const SPREADSHEET_ID = '1QRRjhqy06OvhcJnSS1NYaFFbLHn59vFN35nmIYFY2K0';
 const DRIVE_FOLDER_ID = process.env.REACT_APP_DRIVE_FOLDER_ID;
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly';
 
-let tokenClient = null;
-let accessToken = null;
-
-export const initGoogleApi = () => {
-  return new Promise((resolve) => {
-    const gapiScript = document.createElement('script');
-    gapiScript.src = 'https://apis.google.com/js/api.js';
-    gapiScript.onload = () => {
-      window.gapi.load('client', async () => {
-        await window.gapi.client.init({});
-        await window.gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
-        await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
-        resolve();
-      });
-    };
-    document.body.appendChild(gapiScript);
-
-    const gisScript = document.createElement('script');
-    gisScript.src = 'https://accounts.google.com/gsi/client';
-    document.body.appendChild(gisScript);
-  });
-};
-
-export const signIn = () => {
-  return new Promise((resolve, reject) => {
-    if (!window.google?.accounts?.oauth2) {
-      reject(new Error('Google Identity Services not loaded'));
-      return;
-    }
-    tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: (response) => {
-        if (response.error) { reject(response); return; }
-        accessToken = response.access_token;
-        window.gapi.client.setToken({ access_token: accessToken });
-        resolve();
-      }
-    });
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-  });
-};
-
-export const isSignedIn = () => !!accessToken;
+// 公開讀取 Sheets，不需要登入
+export const initGoogleApi = () => Promise.resolve();
+export const signIn = () => Promise.resolve();
+export const isSignedIn = () => true;
 
 export const getBrandData = async (brandName) => {
-  const res = await window.gapi.client.sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${brandName}!A:Z`
-  });
-  const rows = res.result.values;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(brandName)}!A:Z?key=${API_KEY}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const rows = data.values;
   if (!rows || rows.length < 2) return [];
   const headers = rows[0];
   return rows.slice(1).map(row => {
@@ -64,50 +22,12 @@ export const getBrandData = async (brandName) => {
 };
 
 export const writeRecommendations = async (brandName, weekPeriod, suggestions) => {
-  const data = await getBrandData(brandName);
-  const rowIndex = data.findIndex(r => r['週期'] === weekPeriod);
-  if (rowIndex === -1) return;
-  const sheetRow = rowIndex + 2;
-  await window.gapi.client.sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${brandName}!F${sheetRow}:H${sheetRow}`,
-    valueInputOption: 'RAW',
-    resource: { values: [[suggestions[0], suggestions[1], suggestions[2]]] }
-  });
+  console.log('寫回功能需要授權，目前略過');
 };
 
-export const getBrandFolders = async () => {
-  const res = await window.gapi.client.drive.files.list({
-    q: `'${DRIVE_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
-    orderBy: 'name'
-  });
-  return res.result.files;
-};
-
-export const getBrandFiles = async (brandName) => {
-  const folders = await getBrandFolders();
-  const folder = folders.find(f => f.name === brandName);
-  if (!folder) return [];
-  const res = await window.gapi.client.drive.files.list({
-    q: `'${folder.id}' in parents and trashed=false`,
-    fields: 'files(id, name, createdTime)',
-    orderBy: 'createdTime desc'
-  });
-  return res.result.files;
-};
-
-export const fetchAndParseExcel = async (fileId) => {
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const arrayBuffer = await res.arrayBuffer();
-  const XLSX = await import('xlsx');
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(sheet);
-};
+export const getBrandFolders = async () => [];
+export const getBrandFiles = async () => [];
+export const fetchAndParseExcel = async () => [];
 
 const STANDARDS = {
   'Messenger': { excellent: 50, standard: 100, warning: 150 },
