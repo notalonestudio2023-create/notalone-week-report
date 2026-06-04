@@ -1,9 +1,8 @@
 // src/utils/claudeApi.js
-// 呼叫 Claude API 產出廣告優化建議
+// 透過 Google Apps Script Proxy 呼叫 Claude API
 
-const ANTHROPIC_API_KEY = process.env.REACT_APP_ANTHROPIC_API_KEY;
+const PROXY_URL = 'https://script.google.com/macros/s/AKfycbxKCHpXCKT6S210HyYT718J9aZrfEZ-cBrctZdxP-ul1GUDZxz9bAeU_TFHdnybDuHW/exec';
 
-// 成效標準表（給 Claude 參考）
 const STANDARDS_CONTEXT = `
 廣告成效評估標準表：
 - 互動訊息（Messenger 對話）：卓越 ≤$50 / 標準 $50-100 / 警示 $100-150 / 急救 >$150
@@ -46,25 +45,18 @@ ${adSummary}
 }
 `;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch(PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt })
   });
 
   const data = await response.json();
-  const text = data.content?.[0]?.text || '{}';
+
+  if (!data.success) throw new Error(data.error);
 
   try {
-    const clean = text.replace(/```json|```/g, '').trim();
+    const clean = data.text.replace(/```json|```/g, '').trim();
     return JSON.parse(clean).suggestions || [];
   } catch {
     return [
