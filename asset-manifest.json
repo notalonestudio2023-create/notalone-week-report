@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/notalone-week-report/static/css/main.5fcfda88.css",
+    "main.js": "/notalone-week-report/static/js/main.82a9cd7d.js",
+    "static/js/238.11f71379.chunk.js": "/notalone-week-report/static/js/238.11f71379.chunk.js",
+    "index.html": "/notalone-week-report/index.html",
+    "main.5fcfda88.css.map": "/notalone-week-report/static/css/main.5fcfda88.css.map",
+    "main.82a9cd7d.js.map": "/notalone-week-report/static/js/main.82a9cd7d.js.map",
+    "238.11f71379.chunk.js.map": "/notalone-week-report/static/js/238.11f71379.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.5fcfda88.css",
+    "static/js/main.82a9cd7d.js"
+  ]
+}
