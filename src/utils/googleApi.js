@@ -1,4 +1,4 @@
-const API_KEY = 'AIzaSyAojmIBZM0IKf7_oAIlwk4Hp3JMKAaX00A';
+const API_KEY = 'AIzaSyAojmIBZM0lKf7_oAIlwk4Hp3JMKAaX00A';
 const SPREADSHEET_ID = '1QRRjhqy06OvhcJnSS1NYaFFbLHn59vFN35nmIYFY2K0';
 
 export const initGoogleApi = () => Promise.resolve();
