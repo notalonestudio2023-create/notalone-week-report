@@ -8,7 +8,7 @@ export const signIn = () => Promise.resolve();
 export const isSignedIn = () => true;
 
 export const getBrandData = async (brandName) => {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(brandName)}!A:Z?key=${API_KEY}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(brandName)}!A:Z?key=AIzaSyAojmIBZM0IKf7_oAIlwk4Hp3JMKAaX00A`;
   const res = await fetch(url);
   const data = await res.json();
   const rows = data.values;
