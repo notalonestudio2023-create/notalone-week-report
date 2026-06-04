@@ -1,4 +1,3 @@
-const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY;
 const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 const SPREADSHEET_ID = process.env.REACT_APP_SPREADSHEET_ID;
 const DRIVE_FOLDER_ID = process.env.REACT_APP_DRIVE_FOLDER_ID;
@@ -13,13 +12,9 @@ export const initGoogleApi = () => {
     gapiScript.src = 'https://apis.google.com/js/api.js';
     gapiScript.onload = () => {
       window.gapi.load('client', async () => {
-        await window.gapi.client.init({
-          apiKey: API_KEY,
-          discoveryDocs: [
-            'https://sheets.googleapis.com/$discovery/rest?version=v4',
-            'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
-          ]
-        });
+        await window.gapi.client.init({});
+        await window.gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
+        await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
         resolve();
       });
     };
@@ -27,29 +22,26 @@ export const initGoogleApi = () => {
 
     const gisScript = document.createElement('script');
     gisScript.src = 'https://accounts.google.com/gsi/client';
-    gisScript.onload = () => {
-      tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-          accessToken = response.access_token;
-          window.gapi.client.setToken({ access_token: accessToken });
-        }
-      });
-    };
     document.body.appendChild(gisScript);
   });
 };
 
 export const signIn = () => {
   return new Promise((resolve, reject) => {
-    if (!tokenClient) { reject(new Error('Token client not initialized')); return; }
-    tokenClient.callback = (response) => {
-      if (response.error) { reject(response); return; }
-      accessToken = response.access_token;
-      window.gapi.client.setToken({ access_token: accessToken });
-      resolve();
-    };
+    if (!window.google?.accounts?.oauth2) {
+      reject(new Error('Google Identity Services not loaded'));
+      return;
+    }
+    tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (response) => {
+        if (response.error) { reject(response); return; }
+        accessToken = response.access_token;
+        window.gapi.client.setToken({ access_token: accessToken });
+        resolve();
+      }
+    });
     tokenClient.requestAccessToken({ prompt: 'consent' });
   });
 };
