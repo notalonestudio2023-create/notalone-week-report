@@ -16,7 +16,7 @@ export default function ReportPage() {
   const [allData, setAllData] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [adData, setAdData] = useState([]);
-  const [adLoading, setAdLoading] = useState(false);
+  const [adLoading, setAdLoading] = useState(true);
   const [adError, setAdError] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
