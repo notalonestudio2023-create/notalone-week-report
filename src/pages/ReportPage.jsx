@@ -181,17 +181,17 @@ export default function ReportPage() {
             <p className="header-period">社群廣告週報</p>
           </div>
         </div>
-        <div className="week-selector">
+      <div className="week-selector">
   <select
     className="week-select"
     value={selectedWeek || ''}
     onChange={e => setSelectedWeek(e.target.value)}>
-    {allData.map(d => {
-      const start = d['週期開始日'] || '';
-      const end = d['週期結束日'] || '';
+    {[...allData].reverse().map(d => {
+      const start = (d['週期開始日'] || '').replace(/-/g, '/');
+      const end = (d['週期結束日'] || '').replace(/-/g, '/');
       return (
-        <option key={start} value={start}>
-          {start.replace(/-/g, '/')} – {end.replace(/-/g, '/')}
+        <option key={d['週期開始日']} value={d['週期開始日']}>
+          {start} – {end}
         </option>
       );
     })}
