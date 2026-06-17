@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
@@ -19,8 +19,8 @@ export default function ReportPage() {
   const [adLoading, setAdLoading] = useState(false);
   const [adError, setAdError] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiDone, setAiDone] = useState(false);
   const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
+  const aiTriggered = useRef(new Set());
 
   const AD_SERIES = [
     { key: 'Messenger', color: '#A32D2D', dash: [] },
@@ -46,26 +46,84 @@ export default function ReportPage() {
     if (!selectedWeek) return;
     setAdData([]);
     setAdError(null);
-    setAiDone(false);
     setAdLoading(true);
-    // weekStart 轉成 YYYY-MM-DD 格式
     const weekStart = selectedWeek.replace(/\//g, '-');
     getAdData(brandId, weekStart)
       .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
       .catch(e => { setAdError(e.message); setAdLoading(false); });
   }, [selectedWeek, brandId]);
 
+  // 廣告資料載入完成後，若建議為空則自動產出
+  useEffect(() => {
+    if (adLoading) return;
+    if (!selectedWeek || !allData.length) return;
+    const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
+    if (currentIdx < 0) return;
+    const currentWeek = allData[currentIdx];
+    const hasSuggestions = currentWeek['建議01'] || currentWeek['建議02'] || currentWeek['建議03'];
+    if (hasSuggestions) return;
+    const key = `${brandId}_${selectedWeek}`;
+    if (aiTriggered.current.has(key)) return;
+    aiTriggered.current.add(key);
+    triggerAI(currentIdx);
+  }, [adLoading, selectedWeek, allData]);
+
+  const triggerAI = async (currentIdx) => {
+    setAiLoading(true);
+    try {
+      const currentData = allData[currentIdx];
+      const prevData = currentIdx > 0 ? allData[currentIdx - 1] : null;
+      const isBasoto = brandId === BASOTO;
+      const weekStart = currentData['週期開始日'].replace(/\//g, '-');
+      const weekEnd = (currentData['週期結束日'] || '').replace(/\//g, '-');
+
+      const socialData = isBasoto ? {
+        fb: 0,
+        ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
+        line: parseInt(currentData['LINE好友數'] || 0)
+      } : {
+        fb: parseInt(currentData['FB追蹤數'] || 0),
+        ig: parseInt(currentData['IG追蹤數'] || 0),
+        line: parseInt(currentData['LINE好友數'] || 0)
+      };
+
+      const prevSocialData = prevData ? (isBasoto ? {
+        fb: 0,
+        ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
+        line: parseInt(prevData['LINE好友數'] || 0)
+      } : {
+        fb: parseInt(prevData['FB追蹤數'] || 0),
+        ig: parseInt(prevData['IG追蹤數'] || 0),
+        line: parseInt(prevData['LINE好友數'] || 0)
+      }) : null;
+
+      const result = await generateRecommendations({
+        brandName: brandId, weekStart, weekEnd, adData, socialData, prevSocialData
+      });
+
+      await writeRecommendations(brandId, weekStart, result);
+
+      setAllData(prev => prev.map(d =>
+        d['週期開始日'] === selectedWeek
+          ? { ...d, 建議01: result[0], 建議02: result[1], 建議03: result[2] }
+          : d
+      ));
+    } catch (e) {
+      console.error('AI 建議產出失敗：', e.message);
+    }
+    setAiLoading(false);
+  };
+
   const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
   const currentWeek = allData[currentIdx] || {};
   const prevWeek = currentIdx > 0 ? allData[currentIdx - 1] : null;
+  const isBasoto = brandId === BASOTO;
 
   const calcGrowth = (field) => {
     if (currentIdx <= 0) return 0;
     return parseInt(currentWeek[field] || 0) - parseInt(prevWeek[field] || 0);
   };
 
-  // 集客數據
-  const isBasoto = brandId === BASOTO;
   const metrics = isBasoto ? [
     { label: 'GROUP IG 追蹤', field: 'GROUP IG追蹤數' },
     { label: 'CAFFE IG 追蹤', field: 'CAFFE IG追蹤數' },
@@ -77,7 +135,6 @@ export default function ReportPage() {
     { label: 'LINE OA 好友',  field: 'LINE好友數' }
   ];
 
-  // 廣告歷史走勢（用 adData 的 type 動態決定顯示哪些系列）
   const activeAdTypes = new Set(adData.map(a => a.type));
   const visibleSeries = AD_SERIES.filter(s => activeAdTypes.has(s.key));
 
@@ -104,63 +161,12 @@ export default function ReportPage() {
     }
   };
 
-  // 建議顯示
   const suggestions = [
     currentWeek['建議01'] || '',
     currentWeek['建議02'] || '',
     currentWeek['建議03'] || ''
   ];
   const hasSuggestions = suggestions.some(s => s);
-
-  // AI 產出建議
-  const handleGenerateAI = async () => {
-    setAiLoading(true);
-    try {
-      const weekStart = selectedWeek.replace(/\//g, '-');
-      const currentData = allData[currentIdx];
-      const prevData = prevWeek;
-
-      const socialData = isBasoto ? {
-        fb: 0, ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
-        line: parseInt(currentData['LINE好友數'] || 0)
-      } : {
-        fb: parseInt(currentData['FB追蹤數'] || 0),
-        ig: parseInt(currentData['IG追蹤數'] || 0),
-        line: parseInt(currentData['LINE好友數'] || 0)
-      };
-
-      const prevSocialData = prevData ? (isBasoto ? {
-        fb: 0, ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
-        line: parseInt(prevData['LINE好友數'] || 0)
-      } : {
-        fb: parseInt(prevData['FB追蹤數'] || 0),
-        ig: parseInt(prevData['IG追蹤數'] || 0),
-        line: parseInt(prevData['LINE好友數'] || 0)
-      }) : null;
-
-      const result = await generateRecommendations({
-        brandName: brandId,
-        weekStart,
-        weekEnd: currentData['週期結束日']?.replace(/\//g, '-') || '',
-        adData,
-        socialData,
-        prevSocialData
-      });
-
-      await writeRecommendations(brandId, weekStart, result);
-
-      // 更新本地顯示
-      setAllData(prev => prev.map(d =>
-        d['週期開始日'] === selectedWeek
-          ? { ...d, 建議01: result[0], 建議02: result[1], 建議03: result[2] }
-          : d
-      ));
-      setAiDone(true);
-    } catch (e) {
-      alert('AI 建議產出失敗：' + e.message);
-    }
-    setAiLoading(false);
-  };
 
   if (loading) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">資料載入中...</p></div>;
   if (error) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">{error}</p></div>;
@@ -191,7 +197,6 @@ export default function ReportPage() {
 
       <main className="report-body">
 
-        {/* 集客狀況 */}
         <section className="report-section">
           <h2 className="sec-title">集客狀況</h2>
           <div className="metric-grid">
@@ -212,11 +217,10 @@ export default function ReportPage() {
 
         <div className="divider" />
 
-        {/* 本週廣告成效 */}
         <section className="report-section">
           <h2 className="sec-title">本週廣告成效</h2>
           {adLoading && <p className="empty-hint">載入廣告資料中...</p>}
-          {adError && <p className="empty-hint" style={{ color: '#c0392b' }}>廣告資料載入失敗：{adError}</p>}
+          {adError && <p className="empty-hint">本週廣告資料尚未上傳</p>}
           {!adLoading && !adError && adData.length === 0 && (
             <p className="empty-hint">本週無廣告投放資料</p>
           )}
@@ -252,7 +256,6 @@ export default function ReportPage() {
 
         <div className="divider" />
 
-        {/* 廣告成本歷史走勢 */}
         {allData.length > 1 && visibleSeries.length > 0 && (
           <section className="report-section">
             <h2 className="sec-title">廣告成本歷史走勢（元/次）</h2>
@@ -277,10 +280,12 @@ export default function ReportPage() {
 
         <div className="divider" />
 
-        {/* 優化建議 */}
         <section className="report-section">
-          <h2 className="sec-title" style={{ marginBottom: '0.85rem' }}>優化建議</h2>
-          {hasSuggestions ? (
+          <h2 className="sec-title">優化建議</h2>
+          {aiLoading && (
+            <p className="empty-hint">🤖 AI 分析中，請稍候...</p>
+          )}
+          {!aiLoading && hasSuggestions && (
             <div className="suggestions-list">
               {suggestions.map((s, i) => s ? (
                 <div key={i} className="suggestion-card">
@@ -289,19 +294,10 @@ export default function ReportPage() {
                 </div>
               ) : null)}
             </div>
-          ) : (
+          )}
+          {!aiLoading && !hasSuggestions && (
             <p className="empty-hint">尚未產出本週優化建議</p>
           )}
-
-          <div style={{ marginTop: '1.2rem' }}>
-            <button
-              className="ai-generate-btn"
-              onClick={handleGenerateAI}
-              disabled={aiLoading}>
-              {aiLoading ? '🤖 AI 分析中...' : aiDone ? '✅ 重新產出建議' : '🤖 AI 產出優化建議'}
-            </button>
-            {aiDone && <span style={{ marginLeft: '10px', fontSize: '13px', color: '#0F6E56' }}>已寫回週報</span>}
-          </div>
         </section>
 
         <footer className="report-footer">
