@@ -21,9 +21,7 @@ export const generateRecommendations = async ({
 - LINE OA 好友：${socialData.line.toLocaleString()} 人（較上週 ${prevSocialData ? (socialData.line - prevSocialData.line >= 0 ? '+' : '') + (socialData.line - prevSocialData.line) + ' 人' : '無前週資料'}）`.trim();
 
   const adSummary = hasAd
-    ? adData.map(a =>
-        `${a.type}：花費 $${a.spend}、成果 ${a.result} 次、每次成本 $${a.cost}（${a.label}）`
-      ).join('\n')
+    ? adData.map(a => `${a.type}：花費 $${a.spend}、成果 ${a.result} 次、每次成本 $${a.cost}（${a.label}）`).join('\n')
     : '本週無廣告投放資料';
 
   const prompt = `
@@ -56,7 +54,7 @@ ${adSummary}
 
   const res = await fetch(PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ prompt })
   });
   const data = await res.json();
