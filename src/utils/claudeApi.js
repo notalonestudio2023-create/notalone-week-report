@@ -1,3 +1,4 @@
+// v2
 const PROXY_URL = 'https://script.google.com/macros/s/AKfycbxKCHpXCKT6S210HyYT718J9aZrfEZ-cBrctZdxP-ul1GUDZxz9bAeU_TFHdnybDuHW/exec';
 
 const STANDARDS_CONTEXT = `
