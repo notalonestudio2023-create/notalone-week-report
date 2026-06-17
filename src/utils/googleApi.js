@@ -2,6 +2,15 @@ const API_KEY = 'AIzaSyAojmIBZM0lKf7_oAIlwk4Hp3JMKAaX00A';
 const SPREADSHEET_ID = '1QRRjhqy06OvhcJnSS1NYaFFbLHn59vFN35nmIYFY2K0';
 const PROXY_URL = 'https://script.google.com/macros/s/AKfycbxKCHpXCKT6S210HyYT718J9aZrfEZ-cBrctZdxP-ul1GUDZxz9bAeU_TFHdnybDuHW/exec';
 
+const proxyFetch = async (body) => {
+  const res = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+};
+
 export const initGoogleApi = () => Promise.resolve();
 export const signIn = () => Promise.resolve();
 export const isSignedIn = () => true;
@@ -21,23 +30,13 @@ export const getBrandData = async (brandName) => {
 };
 
 export const getAdData = async (brandName, weekStart) => {
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'getAdData', brandName, weekStart })
-  });
-  const data = await res.json();
+  const data = await proxyFetch({ action: 'getAdData', brandName, weekStart });
   if (!data.success) throw new Error(data.error);
   return data.rows || [];
 };
 
 export const writeRecommendations = async (brandName, weekStart, suggestions) => {
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'writeRecommendations', brandName, weekStart, suggestions })
-  });
-  const data = await res.json();
+  const data = await proxyFetch({ action: 'writeRecommendations', brandName, weekStart, suggestions });
   if (!data.success) throw new Error(data.error);
 };
 
