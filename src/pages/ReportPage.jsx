@@ -54,9 +54,19 @@ export default function ReportPage() {
   }, [selectedWeek, brandId]);
 
   // 廣告資料載入完成後，若建議為空則自動產出
-  useEffect(() => {
+useEffect(() => {
     if (adLoading) return;
     if (!selectedWeek || !allData.length) return;
+    const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
+    if (currentIdx < 0) return;
+    const currentWeek = allData[currentIdx];
+    const hasSuggestions = currentWeek['建議01'] || currentWeek['建議02'] || currentWeek['建議03'];
+    if (hasSuggestions) return;
+    const key = `${brandId}_${selectedWeek}`;
+    if (aiTriggered.current.has(key)) return;
+    aiTriggered.current.add(key);
+    triggerAI(currentIdx);
+  }, [adLoading, selectedWeek, allData, brandId]);
     const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
     if (currentIdx < 0) return;
     const currentWeek = allData[currentIdx];
