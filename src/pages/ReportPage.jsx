@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { getBrandData, parseAdData } from '../utils/googleApi';
+import { getBrandData, getAdData, parseAdData, writeRecommendations } from '../utils/googleApi';
+import { generateRecommendations } from '../utils/claudeApi';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const GradeBadge = ({ grade, label }) => {
-  const cls = { excellent:'badge-excellent', ok:'badge-ok', warn:'badge-warn', danger:'badge-danger' }[grade] || 'badge-ok';
-  return <span className={`badge ${cls}`}>{label}</span>;
-};
+const BASOTO = '巴索托集團';
 
 export default function ReportPage() {
   const { brandId } = useParams();
@@ -17,35 +15,77 @@ export default function ReportPage() {
   const [error, setError] = useState(null);
   const [allData, setAllData] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState(null);
-  const [activeLines, setActiveLines] = useState(new Set(['Messenger','Lead Form','追蹤FB','追蹤IG','點擊詢問']));
+  const [adData, setAdData] = useState([]);
+  const [adLoading, setAdLoading] = useState(false);
+  const [adError, setAdError] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDone, setAiDone] = useState(false);
+  const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
 
+  const AD_SERIES = [
+    { key: 'Messenger', color: '#A32D2D', dash: [] },
+    { key: 'Lead Form', color: '#0F6E56', dash: [] },
+    { key: '追蹤FB',   color: '#854F0B', dash: [4, 3] },
+    { key: '追蹤IG',   color: '#1B3A6B', dash: [4, 3] },
+    { key: '點擊詢問', color: '#3B6D11', dash: [4, 3] }
+  ];
+
+  // 載入 Sheets 資料
   useEffect(() => {
+    setLoading(true);
     getBrandData(brandId).then(data => {
-      if (data.length === 0) { setError('尚無週報資料'); setLoading(false); return; }
+      if (!data || data.length === 0) { setError('尚無週報資料'); setLoading(false); return; }
       setAllData(data);
       setSelectedWeek(data[data.length - 1]['週期開始日']);
       setLoading(false);
     }).catch(e => { setError('資料載入失敗：' + e.message); setLoading(false); });
   }, [brandId]);
 
+  // 切換週期時載入廣告資料
+  useEffect(() => {
+    if (!selectedWeek) return;
+    setAdData([]);
+    setAdError(null);
+    setAiDone(false);
+    setAdLoading(true);
+    // weekStart 轉成 YYYY-MM-DD 格式
+    const weekStart = selectedWeek.replace(/\//g, '-');
+    getAdData(brandId, weekStart)
+      .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
+      .catch(e => { setAdError(e.message); setAdLoading(false); });
+  }, [selectedWeek, brandId]);
+
+  const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
+  const currentWeek = allData[currentIdx] || {};
+  const prevWeek = currentIdx > 0 ? allData[currentIdx - 1] : null;
+
   const calcGrowth = (field) => {
-    const idx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
-    if (idx <= 0) return 0;
-    return (parseInt(allData[idx][field] || 0)) - (parseInt(allData[idx - 1][field] || 0));
+    if (currentIdx <= 0) return 0;
+    return parseInt(currentWeek[field] || 0) - parseInt(prevWeek[field] || 0);
   };
 
-  const AD_SERIES = [
-    { key: 'Messenger', color: '#A32D2D', dash: [] },
-    { key: 'Lead Form', color: '#0F6E56', dash: [] },
-    { key: '追蹤FB', color: '#854F0B', dash: [4,3] },
-    { key: '追蹤IG', color: '#1B3A6B', dash: [4,3] },
-    { key: '點擊詢問', color: '#3B6D11', dash: [4,3] }
+  // 集客數據
+  const isBasoto = brandId === BASOTO;
+  const metrics = isBasoto ? [
+    { label: 'GROUP IG 追蹤', field: 'GROUP IG追蹤數' },
+    { label: 'CAFFE IG 追蹤', field: 'CAFFE IG追蹤數' },
+    { label: 'PIZZA IG 追蹤', field: 'PIZZA IG追蹤數' },
+    { label: 'LINE OA 好友',  field: 'LINE好友數' }
+  ] : [
+    { label: 'Facebook 追蹤', field: 'FB追蹤數' },
+    { label: 'Instagram 追蹤', field: 'IG追蹤數' },
+    { label: 'LINE OA 好友',  field: 'LINE好友數' }
   ];
 
+  // 廣告歷史走勢（用 adData 的 type 動態決定顯示哪些系列）
+  const activeAdTypes = new Set(adData.map(a => a.type));
+  const visibleSeries = AD_SERIES.filter(s => activeAdTypes.has(s.key));
+
   const histChartData = {
-    labels: allData.map(d => d['週期開始日']?.slice(5) || ''),
-    datasets: AD_SERIES.map(s => ({
-      label: s.key, data: allData.map(d => parseFloat(d[`成本_${s.key}`] || 0)),
+    labels: allData.map(d => (d['週期開始日'] || '').slice(5)),
+    datasets: visibleSeries.map(s => ({
+      label: s.key,
+      data: allData.map(d => parseFloat(d[`成本_${s.key}`] || 0)),
       borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2,
       borderDash: s.dash, pointRadius: 5, pointBackgroundColor: s.color, tension: 0.2,
       hidden: !activeLines.has(s.key),
@@ -59,26 +99,71 @@ export default function ReportPage() {
     plugins: { legend: { display: false } },
     scales: {
       x: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
-      yH: { type: 'linear', position: 'left', ticks: { callback: v => '$'+v, font: { size: 11 } }, title: { display: true, text: '訊息/表單', font: { size: 10 } } },
-      yL: { type: 'linear', position: 'right', min: 0, max: 20, ticks: { callback: v => '$'+v, font: { size: 11 } }, grid: { drawOnChartArea: false }, title: { display: true, text: '追蹤/點擊', font: { size: 10 } } }
+      yH: { type: 'linear', position: 'left', ticks: { callback: v => '$' + v, font: { size: 11 } }, title: { display: true, text: '訊息/表單', font: { size: 10 } } },
+      yL: { type: 'linear', position: 'right', min: 0, ticks: { callback: v => '$' + v, font: { size: 11 } }, grid: { drawOnChartArea: false }, title: { display: true, text: '追蹤/點擊', font: { size: 10 } } }
     }
+  };
+
+  // 建議顯示
+  const suggestions = [
+    currentWeek['建議01'] || '',
+    currentWeek['建議02'] || '',
+    currentWeek['建議03'] || ''
+  ];
+  const hasSuggestions = suggestions.some(s => s);
+
+  // AI 產出建議
+  const handleGenerateAI = async () => {
+    setAiLoading(true);
+    try {
+      const weekStart = selectedWeek.replace(/\//g, '-');
+      const currentData = allData[currentIdx];
+      const prevData = prevWeek;
+
+      const socialData = isBasoto ? {
+        fb: 0, ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
+        line: parseInt(currentData['LINE好友數'] || 0)
+      } : {
+        fb: parseInt(currentData['FB追蹤數'] || 0),
+        ig: parseInt(currentData['IG追蹤數'] || 0),
+        line: parseInt(currentData['LINE好友數'] || 0)
+      };
+
+      const prevSocialData = prevData ? (isBasoto ? {
+        fb: 0, ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
+        line: parseInt(prevData['LINE好友數'] || 0)
+      } : {
+        fb: parseInt(prevData['FB追蹤數'] || 0),
+        ig: parseInt(prevData['IG追蹤數'] || 0),
+        line: parseInt(prevData['LINE好友數'] || 0)
+      }) : null;
+
+      const result = await generateRecommendations({
+        brandName: brandId,
+        weekStart,
+        weekEnd: currentData['週期結束日']?.replace(/\//g, '-') || '',
+        adData,
+        socialData,
+        prevSocialData
+      });
+
+      await writeRecommendations(brandId, weekStart, result);
+
+      // 更新本地顯示
+      setAllData(prev => prev.map(d =>
+        d['週期開始日'] === selectedWeek
+          ? { ...d, 建議01: result[0], 建議02: result[1], 建議03: result[2] }
+          : d
+      ));
+      setAiDone(true);
+    } catch (e) {
+      alert('AI 建議產出失敗：' + e.message);
+    }
+    setAiLoading(false);
   };
 
   if (loading) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">資料載入中...</p></div>;
   if (error) return <div className="loading-screen"><div className="loading-logo">定然</div><p className="loading-sub">{error}</p></div>;
-
-  const currentWeek = allData.find(d => d['週期開始日'] === selectedWeek) || {};
-  const fbGrowth = calcGrowth('FB追蹤數');
-  const igGrowth = calcGrowth('IG追蹤數');
-  const lineGrowth = calcGrowth('LINE好友數');
-  const totalSpend = 0;
-  const totalReach = 0;
-  const suggestions = [
-    { title: currentWeek['建議01']?.split('｜')[0] || '', body: currentWeek['建議01']?.split('｜')[1] || '' },
-    { title: currentWeek['建議02']?.split('｜')[0] || '', body: currentWeek['建議02']?.split('｜')[1] || '' },
-    { title: currentWeek['建議03']?.split('｜')[0] || '', body: currentWeek['建議03']?.split('｜')[1] || '' }
-  ];
-  const hasSuggestions = suggestions.some(s => s.title);
 
   return (
     <div className="report-root">
@@ -95,42 +180,92 @@ export default function ReportPage() {
         </div>
         <div className="week-selector">
           {allData.map(d => (
-            <button key={d['週期開始日']} className={`week-btn ${d['週期開始日'] === selectedWeek ? 'active' : ''}`}
+            <button key={d['週期開始日']}
+              className={`week-btn ${d['週期開始日'] === selectedWeek ? 'active' : ''}`}
               onClick={() => setSelectedWeek(d['週期開始日'])}>
-              {d['週期開始日']?.slice(5)}
+              {(d['週期開始日'] || '').slice(5)}
             </button>
           ))}
         </div>
       </header>
 
       <main className="report-body">
+
+        {/* 集客狀況 */}
         <section className="report-section">
           <h2 className="sec-title">集客狀況</h2>
           <div className="metric-grid">
-            {[
-              { label: 'Facebook 追蹤', value: parseInt(currentWeek['FB追蹤數'] || 0).toLocaleString(), growth: fbGrowth },
-              { label: 'Instagram 追蹤', value: parseInt(currentWeek['IG追蹤數'] || 0).toLocaleString(), growth: igGrowth },
-              { label: 'LINE OA 好友', value: parseInt(currentWeek['LINE好友數'] || 0).toLocaleString(), growth: lineGrowth }
-            ].map(m => (
-              <div key={m.label} className="metric-card">
-                <p className="metric-label">{m.label}</p>
-                <p className="metric-value">{m.value}</p>
-                <p className={`metric-growth ${m.growth >= 0 ? 'pos' : 'neg'}`}>{m.growth >= 0 ? '+' : ''}{m.growth} 人</p>
-              </div>
-            ))}
+            {metrics.map(m => {
+              const growth = calcGrowth(m.field);
+              return (
+                <div key={m.label} className="metric-card">
+                  <p className="metric-label">{m.label}</p>
+                  <p className="metric-value">{parseInt(currentWeek[m.field] || 0).toLocaleString()}</p>
+                  <p className={`metric-growth ${growth >= 0 ? 'pos' : 'neg'}`}>
+                    {growth >= 0 ? '+' : ''}{growth} 人
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </section>
 
         <div className="divider" />
 
-        {allData.length > 1 && (
+        {/* 本週廣告成效 */}
+        <section className="report-section">
+          <h2 className="sec-title">本週廣告成效</h2>
+          {adLoading && <p className="empty-hint">載入廣告資料中...</p>}
+          {adError && <p className="empty-hint" style={{ color: '#c0392b' }}>廣告資料載入失敗：{adError}</p>}
+          {!adLoading && !adError && adData.length === 0 && (
+            <p className="empty-hint">本週無廣告投放資料</p>
+          )}
+          {!adLoading && adData.length > 0 && (
+            <div className="ad-table-wrap">
+              <table className="ad-table">
+                <thead>
+                  <tr>
+                    <th>廣告類型</th>
+                    <th>花費</th>
+                    <th>成果</th>
+                    <th>每次成本</th>
+                    <th>觸及人數</th>
+                    <th>評級</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adData.map(a => (
+                    <tr key={a.type}>
+                      <td>{a.type}</td>
+                      <td>${a.spend.toLocaleString()}</td>
+                      <td>{a.result.toLocaleString()}</td>
+                      <td>${a.cost}</td>
+                      <td>{a.reach.toLocaleString()}</td>
+                      <td><span className={`badge badge-${a.grade}`}>{a.label}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <div className="divider" />
+
+        {/* 廣告成本歷史走勢 */}
+        {allData.length > 1 && visibleSeries.length > 0 && (
           <section className="report-section">
             <h2 className="sec-title">廣告成本歷史走勢（元/次）</h2>
             <div className="toggle-row">
-              {AD_SERIES.map(s => (
-                <button key={s.key} className={`toggle-btn ${activeLines.has(s.key) ? 'on' : ''}`}
+              {visibleSeries.map(s => (
+                <button key={s.key}
+                  className={`toggle-btn ${activeLines.has(s.key) ? 'on' : ''}`}
                   style={activeLines.has(s.key) ? { background: s.color, borderColor: s.color } : {}}
-                  onClick={() => { const next = new Set(activeLines); next.has(s.key) ? next.delete(s.key) : next.add(s.key); setActiveLines(next); }}>
+                  onClick={() => {
+                    const next = new Set(activeLines);
+                    next.has(s.key) ? next.delete(s.key) : next.add(s.key);
+                    setActiveLines(next);
+                  }}>
                   {s.key}
                 </button>
               ))}
@@ -142,21 +277,31 @@ export default function ReportPage() {
 
         <div className="divider" />
 
+        {/* 優化建議 */}
         <section className="report-section">
           <h2 className="sec-title" style={{ marginBottom: '0.85rem' }}>優化建議</h2>
           {hasSuggestions ? (
             <div className="suggestions-list">
-              {suggestions.filter(s => s.title).map((s, i) => (
+              {suggestions.map((s, i) => s ? (
                 <div key={i} className="suggestion-card">
                   <p className="suggestion-num">建議 0{i + 1}</p>
-                  <p className="suggestion-title">{s.title}</p>
-                  <p className="suggestion-body">{s.body}</p>
+                  <p className="suggestion-body">{s}</p>
                 </div>
-              ))}
+              ) : null)}
             </div>
           ) : (
             <p className="empty-hint">尚未產出本週優化建議</p>
           )}
+
+          <div style={{ marginTop: '1.2rem' }}>
+            <button
+              className="ai-generate-btn"
+              onClick={handleGenerateAI}
+              disabled={aiLoading}>
+              {aiLoading ? '🤖 AI 分析中...' : aiDone ? '✅ 重新產出建議' : '🤖 AI 產出優化建議'}
+            </button>
+            {aiDone && <span style={{ marginLeft: '10px', fontSize: '13px', color: '#0F6E56' }}>已寫回週報</span>}
+          </div>
         </section>
 
         <footer className="report-footer">
