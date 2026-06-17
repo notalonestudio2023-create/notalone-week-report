@@ -24,9 +24,7 @@ export const generateRecommendations = async ({
     ? adData.map(a => `${a.type}：花費 $${a.spend}、成果 ${a.result} 次、每次成本 $${a.cost}（${a.label}）`).join('\n')
     : '本週無廣告投放資料';
 
-  const prompt = `
-你是定然數位公關的社群顧問，正在為品牌「${brandName}」撰寫 ${weekStart} 至 ${weekEnd} 的週報優化建議。
-建議對象是品牌客戶，語氣專業、正向、易讀。每月廣告預算固定，請勿建議調整預算金額。
+  const prompt = `你是定然數位公關的社群顧問，正在為品牌「${brandName}」撰寫 ${weekStart} 至 ${weekEnd} 的週報優化建議。建議對象是品牌客戶，語氣專業、正向、易讀。每月廣告預算固定，請勿建議調整預算金額。
 
 ${STANDARDS_CONTEXT}
 
@@ -43,14 +41,7 @@ ${adSummary}
 若本週無廣告資料，建議02與03改針對社群內容經營方向給建議。
 
 請以 JSON 格式回覆，不要加任何其他文字：
-{
-  "suggestions": [
-    "建議01的完整內容",
-    "建議02的完整內容",
-    "建議03的完整內容"
-  ]
-}
-`.trim();
+{"suggestions":["建議01的完整內容","建議02的完整內容","建議03的完整內容"]}`;
 
   const res = await fetch(PROXY_URL, {
     method: 'POST',
