@@ -182,14 +182,21 @@ export default function ReportPage() {
           </div>
         </div>
         <div className="week-selector">
-          {allData.map(d => (
-            <button key={d['週期開始日']}
-              className={`week-btn ${d['週期開始日'] === selectedWeek ? 'active' : ''}`}
-              onClick={() => setSelectedWeek(d['週期開始日'])}>
-              {(d['週期開始日'] || '').slice(5)}
-            </button>
-          ))}
-        </div>
+  <select
+    className="week-select"
+    value={selectedWeek || ''}
+    onChange={e => setSelectedWeek(e.target.value)}>
+    {allData.map(d => {
+      const start = d['週期開始日'] || '';
+      const end = d['週期結束日'] || '';
+      return (
+        <option key={start} value={start}>
+          {start.replace(/-/g, '/')} – {end.replace(/-/g, '/')}
+        </option>
+      );
+    })}
+  </select>
+</div>
       </header>
 
       <main className="report-body">
