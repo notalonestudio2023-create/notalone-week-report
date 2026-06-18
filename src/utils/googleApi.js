@@ -41,6 +41,17 @@ export const getBudgetData = async (brandName, weekStart) => {
   return data.budget || null;
 };
 
+export const parseBudgetImage = async (brandName, weekStart) => {
+  const data = await proxyFetch({ action: 'parseBudgetImage', brandName, weekStart });
+  if (!data.success) throw new Error(data.error);
+  return data.budget || null;
+};
+
+export const clearBudgetData = async (brandName, effectiveDate) => {
+  const data = await proxyFetch({ action: 'clearBudgetData', brandName, effectiveDate });
+  if (!data.success) throw new Error(data.error);
+};
+
 export const writeRecommendations = async (brandName, weekStart, suggestions) => {
   const data = await proxyFetch({ action: 'writeRecommendations', brandName, weekStart, suggestions });
   if (!data.success) throw new Error(data.error);
