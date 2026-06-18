@@ -42,7 +42,12 @@ export const getBudgetData = async (brandName, weekStart) => {
 };
 
 export const parseBudgetImage = async (brandName, weekStart) => {
-  const data = await proxyFetch({ action: 'parseBudgetImage', brandName, weekStart });
+  const res = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'parseBudgetImage', brandName, weekStart })
+  });
+  const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.budget || null;
 };
