@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { getBrandData, getAdData, parseAdData, writeRecommendations, getBudgetData } from '../utils/googleApi';
+import { getBrandData, getAdData, parseAdData, writeRecommendations, getBudgetData, parseBudgetImage, clearBudgetData } from '../utils/googleApi';
 import { generateRecommendations } from '../utils/claudeApi';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -19,6 +19,7 @@ export default function ReportPage() {
   const [adLoading, setAdLoading] = useState(true);
   const [adError, setAdError] = useState(null);
   const [budgetData, setBudgetData] = useState(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
   const aiTriggered = useRef(new Set());
@@ -78,7 +79,6 @@ export default function ReportPage() {
       const isBasoto = brandId === BASOTO;
       const weekStart = currentData['週期開始日'].replace(/\//g, '-');
       const weekEnd = (currentData['週期結束日'] || '').replace(/\//g, '-');
-
       const socialData = isBasoto ? {
         fb: 0, ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
         line: parseInt(currentData['LINE好友數'] || 0)
@@ -87,7 +87,6 @@ export default function ReportPage() {
         ig: parseInt(currentData['IG追蹤數'] || 0),
         line: parseInt(currentData['LINE好友數'] || 0)
       };
-
       const prevSocialData = prevData ? (isBasoto ? {
         fb: 0, ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
         line: parseInt(prevData['LINE好友數'] || 0)
@@ -96,13 +95,10 @@ export default function ReportPage() {
         ig: parseInt(prevData['IG追蹤數'] || 0),
         line: parseInt(prevData['LINE好友數'] || 0)
       }) : null;
-
       const result = await generateRecommendations({
         brandName: brandId, weekStart, weekEnd, adData, socialData, prevSocialData
       });
-
       await writeRecommendations(brandId, weekStart, result);
-
       setAllData(prev => prev.map(d =>
         d['週期開始日'] === selectedWeek
           ? { ...d, 建議01: result[0], 建議02: result[1], 建議03: result[2] }
@@ -112,6 +108,30 @@ export default function ReportPage() {
       console.error('AI 建議產出失敗：', e.message);
     }
     setAiLoading(false);
+  };
+
+  const handleParseBudget = async () => {
+    setBudgetLoading(true);
+    try {
+      const weekStart = selectedWeek.replace(/\//g, '-');
+      const result = await parseBudgetImage(brandId, weekStart);
+      setBudgetData(result);
+    } catch (e) {
+      alert('讀取失敗：' + e.message);
+    }
+    setBudgetLoading(false);
+  };
+
+  const handleClearBudget = async () => {
+    if (!budgetData?.effectiveDate) return;
+    setBudgetLoading(true);
+    try {
+      await clearBudgetData(brandId, budgetData.effectiveDate);
+      setBudgetData(null);
+    } catch (e) {
+      alert('清除失敗：' + e.message);
+    }
+    setBudgetLoading(false);
   };
 
   const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
@@ -205,14 +225,37 @@ export default function ReportPage() {
       <main className="report-body">
 
         {/* 區塊一：月預算總覽 */}
-        {budgetData && (
-          <>
-            <section className="report-section">
-              <h2 className="sec-title">月預算總覽</h2>
+        <section className="report-section">
+          <div className="budget-section-header">
+            <h2 className="sec-title" style={{ marginBottom: 0 }}>月預算總覽</h2>
+            {budgetData && (
+              <button
+                className="budget-refresh-btn"
+                onClick={handleClearBudget}
+                disabled={budgetLoading}
+                title="重新讀取月預算">
+                ↺
+              </button>
+            )}
+          </div>
+
+          {!budgetData && !budgetLoading && (
+            <div className="budget-empty">
+              <p className="empty-hint">尚未設定本月預算</p>
+              <button className="gen-btn" onClick={handleParseBudget}>
+                讀取月預算
+              </button>
+            </div>
+          )}
+
+          {budgetLoading && (
+            <p className="empty-hint">讀取中，請稍候...</p>
+          )}
+
+          {budgetData && !budgetLoading && (
+            <>
               <div className="budget-header">
-                <div>
-                  <p className="budget-date">生效日：{budgetData.effectiveDate?.replace(/-/g, '/')}</p>
-                </div>
+                <p className="budget-date">生效日：{budgetData.effectiveDate?.replace(/-/g, '/')}</p>
                 <div className="budget-total">
                   <p className="budget-total-label">月廣告預算</p>
                   <p className="budget-total-value">${budgetData.total?.toLocaleString()}</p>
@@ -242,10 +285,11 @@ export default function ReportPage() {
                   </tbody>
                 </table>
               </div>
-            </section>
-            <div className="divider" />
-          </>
-        )}
+            </>
+          )}
+        </section>
+
+        <div className="divider" />
 
         {/* 區塊二：集客狀況 */}
         <section className="report-section">
