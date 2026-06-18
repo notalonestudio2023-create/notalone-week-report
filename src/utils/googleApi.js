@@ -15,8 +15,14 @@ const proxyGet = async (params) => {
   const query = Object.entries(params)
     .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
     .join('&');
-  const res = await fetch(PROXY_URL + '?' + query);
-  return res.json();
+  const res = await fetch(PROXY_URL + '?' + query, { redirect: 'follow' });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    console.error('proxyGet parse error:', text);
+    return { success: false, error: 'parse error' };
+  }
 };
 
 export const initGoogleApi = () => Promise.resolve();
