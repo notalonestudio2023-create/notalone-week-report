@@ -117,7 +117,7 @@ export default function ReportPage() {
       const result = await parseBudgetImage(brandId, weekStart);
       setBudgetData(result);
     } catch (e) {
-      alert('讀取失敗：' + e.message);
+      console.error('讀取失敗：', e.message);
     }
     setBudgetLoading(false);
   };
@@ -128,8 +128,11 @@ export default function ReportPage() {
     try {
       await clearBudgetData(brandId, budgetData.effectiveDate);
       setBudgetData(null);
+      const weekStart = selectedWeek.replace(/\//g, '-');
+      const result = await parseBudgetImage(brandId, weekStart);
+      setBudgetData(result);
     } catch (e) {
-      alert('清除失敗：' + e.message);
+      console.error('重新讀取失敗：', e.message);
     }
     setBudgetLoading(false);
   };
