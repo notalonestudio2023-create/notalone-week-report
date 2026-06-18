@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { getBrandData, getAdData, parseAdData, writeRecommendations } from '../utils/googleApi';
+import { getBrandData, getAdData, parseAdData, writeRecommendations, getBudgetData } from '../utils/googleApi';
 import { generateRecommendations } from '../utils/claudeApi';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -18,6 +18,7 @@ export default function ReportPage() {
   const [adData, setAdData] = useState([]);
   const [adLoading, setAdLoading] = useState(true);
   const [adError, setAdError] = useState(null);
+  const [budgetData, setBudgetData] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
   const aiTriggered = useRef(new Set());
@@ -45,10 +46,14 @@ export default function ReportPage() {
     setAdData([]);
     setAdError(null);
     setAdLoading(true);
+    setBudgetData(null);
     const weekStart = selectedWeek.replace(/\//g, '-');
     getAdData(brandId, weekStart)
       .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
       .catch(e => { setAdError(e.message); setAdLoading(false); });
+    getBudgetData(brandId, weekStart)
+      .then(b => setBudgetData(b))
+      .catch(() => setBudgetData(null));
   }, [selectedWeek, brandId]);
 
   useEffect(() => {
@@ -75,8 +80,7 @@ export default function ReportPage() {
       const weekEnd = (currentData['週期結束日'] || '').replace(/\//g, '-');
 
       const socialData = isBasoto ? {
-        fb: 0,
-        ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
+        fb: 0, ig: parseInt(currentData['GROUP IG追蹤數'] || 0),
         line: parseInt(currentData['LINE好友數'] || 0)
       } : {
         fb: parseInt(currentData['FB追蹤數'] || 0),
@@ -85,8 +89,7 @@ export default function ReportPage() {
       };
 
       const prevSocialData = prevData ? (isBasoto ? {
-        fb: 0,
-        ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
+        fb: 0, ig: parseInt(prevData['GROUP IG追蹤數'] || 0),
         line: parseInt(prevData['LINE好友數'] || 0)
       } : {
         fb: parseInt(prevData['FB追蹤數'] || 0),
@@ -181,26 +184,70 @@ export default function ReportPage() {
             <p className="header-period">社群廣告週報</p>
           </div>
         </div>
-      <div className="week-selector">
-  <select
-    className="week-select"
-    value={selectedWeek || ''}
-    onChange={e => setSelectedWeek(e.target.value)}>
-    {[...allData].reverse().map(d => {
-      const start = (d['週期開始日'] || '').replace(/-/g, '/');
-      const end = (d['週期結束日'] || '').replace(/-/g, '/');
-      return (
-        <option key={d['週期開始日']} value={d['週期開始日']}>
-          {start} – {end}
-        </option>
-      );
-    })}
-  </select>
-</div>
+        <div className="week-selector">
+          <select
+            className="week-select"
+            value={selectedWeek || ''}
+            onChange={e => setSelectedWeek(e.target.value)}>
+            {[...allData].reverse().map(d => {
+              const start = (d['週期開始日'] || '').replace(/-/g, '/');
+              const end = (d['週期結束日'] || '').replace(/-/g, '/');
+              return (
+                <option key={d['週期開始日']} value={d['週期開始日']}>
+                  {start} – {end}
+                </option>
+              );
+            })}
+          </select>
+        </div>
       </header>
 
       <main className="report-body">
 
+        {/* 區塊一：月預算總覽 */}
+        {budgetData && (
+          <>
+            <section className="report-section">
+              <h2 className="sec-title">月預算總覽</h2>
+              <div className="budget-header">
+                <div>
+                  <p className="budget-date">生效日：{budgetData.effectiveDate?.replace(/-/g, '/')}</p>
+                </div>
+                <div className="budget-total">
+                  <p className="budget-total-label">月廣告預算</p>
+                  <p className="budget-total-value">${budgetData.total?.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="budget-table-wrap">
+                <table className="ad-table">
+                  <thead>
+                    <tr>
+                      <th>平台</th>
+                      <th>廣告目標</th>
+                      <th>轉換目標</th>
+                      <th>走期</th>
+                      <th>受眾區域</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {budgetData.items?.map((item, i) => (
+                      <tr key={i}>
+                        <td>{item.platform}</td>
+                        <td>{item.goal}</td>
+                        <td>{item.conv}</td>
+                        <td style={{ fontSize: '11px', color: 'var(--brand-sub)' }}>{item.period}</td>
+                        <td style={{ fontSize: '11px', color: 'var(--brand-sub)' }}>{item.area}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <div className="divider" />
+          </>
+        )}
+
+        {/* 區塊二：集客狀況 */}
         <section className="report-section">
           <h2 className="sec-title">集客狀況</h2>
           <div className="metric-grid">
@@ -221,6 +268,7 @@ export default function ReportPage() {
 
         <div className="divider" />
 
+        {/* 區塊三：廣告成效 */}
         <section className="report-section">
           <h2 className="sec-title">本週廣告成效</h2>
           {adLoading && <p className="empty-hint">載入廣告資料中...</p>}
@@ -284,11 +332,10 @@ export default function ReportPage() {
 
         <div className="divider" />
 
+        {/* 優化建議 */}
         <section className="report-section">
           <h2 className="sec-title">優化建議</h2>
-          {aiLoading && (
-            <p className="empty-hint">🤖 AI 分析中，請稍候...</p>
-          )}
+          {aiLoading && <p className="empty-hint">🤖 AI 分析中，請稍候...</p>}
           {!aiLoading && hasSuggestions && (
             <div className="suggestions-list">
               {suggestions.map((s, i) => s ? (
