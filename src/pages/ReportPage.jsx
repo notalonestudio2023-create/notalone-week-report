@@ -110,12 +110,14 @@ export default function ReportPage() {
     setAiLoading(false);
   };
 
-  const handleParseBudget = async () => {
+const handleParseBudget = async () => {
     setBudgetLoading(true);
+    setBudgetData(null);
     try {
       const weekStart = selectedWeek.replace(/\//g, '-');
-      const result = await parseBudgetImage(brandId, weekStart);
-      setBudgetData(result);
+      await parseBudgetImage(brandId, weekStart);
+      const result = await getBudgetData(brandId, weekStart);
+      if (result) setBudgetData(result);
     } catch (e) {
       console.error('讀取失敗：', e.message);
     }
@@ -124,13 +126,15 @@ export default function ReportPage() {
 
   const handleClearBudget = async () => {
     if (!budgetData?.effectiveDate) return;
+    const prevEffectiveDate = budgetData.effectiveDate;
     setBudgetLoading(true);
+    setBudgetData(null);
     try {
-      await clearBudgetData(brandId, budgetData.effectiveDate);
-      setBudgetData(null);
+      await clearBudgetData(brandId, prevEffectiveDate);
       const weekStart = selectedWeek.replace(/\//g, '-');
-      const result = await parseBudgetImage(brandId, weekStart);
-      setBudgetData(result);
+      await parseBudgetImage(brandId, weekStart);
+      const result = await getBudgetData(brandId, weekStart);
+      if (result) setBudgetData(result);
     } catch (e) {
       console.error('重新讀取失敗：', e.message);
     }
