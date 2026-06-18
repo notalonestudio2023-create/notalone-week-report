@@ -122,16 +122,14 @@ export default function ReportPage() {
     setBudgetLoading(false);
   };
 
-const handleClearBudget = async () => {
+  const handleClearBudget = async () => {
     if (!budgetData?.effectiveDate) return;
     setBudgetLoading(true);
     try {
       await clearBudgetData(brandId, budgetData.effectiveDate);
-      const weekStart = selectedWeek.replace(/\//g, '-');
-      const result = await parseBudgetImage(brandId, weekStart);
-      setBudgetData(result);
+      setBudgetData(null);
     } catch (e) {
-      alert('重新讀取失敗：' + e.message);
+      alert('清除失敗：' + e.message);
     }
     setBudgetLoading(false);
   };
@@ -226,7 +224,6 @@ const handleClearBudget = async () => {
 
       <main className="report-body">
 
-        {/* 區塊一：月預算總覽 */}
         <section className="report-section">
           <div className="budget-section-header">
             <h2 className="sec-title" style={{ marginBottom: 0 }}>月預算總覽</h2>
@@ -293,7 +290,6 @@ const handleClearBudget = async () => {
 
         <div className="divider" />
 
-        {/* 區塊二：集客狀況 */}
         <section className="report-section">
           <h2 className="sec-title">集客狀況</h2>
           <div className="metric-grid">
@@ -314,7 +310,6 @@ const handleClearBudget = async () => {
 
         <div className="divider" />
 
-        {/* 區塊三：廣告成效 */}
         <section className="report-section">
           <h2 className="sec-title">本週廣告成效</h2>
           {adLoading && <p className="empty-hint">載入廣告資料中...</p>}
@@ -378,7 +373,6 @@ const handleClearBudget = async () => {
 
         <div className="divider" />
 
-        {/* 優化建議 */}
         <section className="report-section">
           <h2 className="sec-title">優化建議</h2>
           {aiLoading && <p className="empty-hint">🤖 AI 分析中，請稍候...</p>}
