@@ -264,3 +264,30 @@ body {
 .budget-total-label { font-size: 11px; color: var(--brand-hint); margin-bottom: 2px; }
 .budget-total-value { font-size: 20px; font-weight: 500; color: var(--brand-text); }
 .budget-table-wrap { overflow-x: auto; }
+/* ─── 月預算 ──────────────────────────────────────────── */
+.budget-section-header {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: .85rem;
+}
+.budget-refresh-btn {
+  background: transparent; border: none;
+  color: var(--brand-hint); font-size: 16px;
+  cursor: pointer; padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color .15s;
+}
+.budget-refresh-btn:hover { color: var(--brand-sub); }
+.budget-empty { text-align: center; padding: 1rem 0; }
+.budget-header {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 1rem;
+  flex-wrap: wrap; gap: 8px;
+}
+.budget-date { font-size: 12px; color: var(--brand-sub); margin-top: 2px; }
+.budget-total {
+  background: var(--brand-mist); border-radius: var(--radius-md);
+  padding: .65rem 1rem; text-align: right;
+}
+.budget-total-label { font-size: 11px; color: var(--brand-hint); margin-bottom: 2px; }
+.budget-total-value { font-size: 20px; font-weight: 500; color: var(--brand-text); }
+.budget-table-wrap { overflow-x: auto; }
