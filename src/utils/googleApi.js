@@ -11,6 +11,14 @@ const proxyFetch = async (body) => {
   return res.json();
 };
 
+const proxyGet = async (params) => {
+  const query = Object.entries(params)
+    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+    .join('&');
+  const res = await fetch(PROXY_URL + '?' + query);
+  return res.json();
+};
+
 export const initGoogleApi = () => Promise.resolve();
 export const signIn = () => Promise.resolve();
 export const isSignedIn = () => true;
@@ -42,18 +50,13 @@ export const getBudgetData = async (brandName, weekStart) => {
 };
 
 export const parseBudgetImage = async (brandName, weekStart) => {
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'parseBudgetImage', brandName, weekStart })
-  });
-  const data = await res.json();
+  const data = await proxyGet({ action: 'parseBudgetImage', brandName, weekStart });
   if (!data.success) throw new Error(data.error);
   return data.budget || null;
 };
 
 export const clearBudgetData = async (brandName, effectiveDate) => {
-  const data = await proxyFetch({ action: 'clearBudgetData', brandName, effectiveDate });
+  const data = await proxyGet({ action: 'clearBudgetData', brandName, effectiveDate });
   if (!data.success) throw new Error(data.error);
 };
 
