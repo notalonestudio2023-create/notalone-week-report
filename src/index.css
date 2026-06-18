@@ -249,3 +249,18 @@ body {
   .header-inner   { flex-direction: column; align-items: flex-start; gap: .75rem; }
   .header-meta    { text-align: left; }
 }
+/* ─── 月預算 ──────────────────────────────────────────── */
+.budget-header {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 1rem;
+  flex-wrap: wrap; gap: 8px;
+}
+.budget-date { font-size: 12px; color: var(--brand-sub); margin-top: 2px; }
+.budget-total {
+  background: var(--brand-mist);
+  border-radius: var(--radius-md);
+  padding: .65rem 1rem; text-align: right;
+}
+.budget-total-label { font-size: 11px; color: var(--brand-hint); margin-bottom: 2px; }
+.budget-total-value { font-size: 20px; font-weight: 500; color: var(--brand-text); }
+.budget-table-wrap { overflow-x: auto; }
