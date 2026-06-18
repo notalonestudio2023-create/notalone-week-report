@@ -122,14 +122,16 @@ export default function ReportPage() {
     setBudgetLoading(false);
   };
 
-  const handleClearBudget = async () => {
+const handleClearBudget = async () => {
     if (!budgetData?.effectiveDate) return;
     setBudgetLoading(true);
     try {
       await clearBudgetData(brandId, budgetData.effectiveDate);
-      setBudgetData(null);
+      const weekStart = selectedWeek.replace(/\//g, '-');
+      const result = await parseBudgetImage(brandId, weekStart);
+      setBudgetData(result);
     } catch (e) {
-      alert('清除失敗：' + e.message);
+      alert('重新讀取失敗：' + e.message);
     }
     setBudgetLoading(false);
   };
