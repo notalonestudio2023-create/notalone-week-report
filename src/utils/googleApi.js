@@ -35,6 +35,12 @@ export const getAdData = async (brandName, weekStart) => {
   return data.rows || [];
 };
 
+export const getBudgetData = async (brandName, weekStart) => {
+  const data = await proxyFetch({ action: 'getBudgetData', brandName, weekStart });
+  if (!data.success) throw new Error(data.error);
+  return data.budget || null;
+};
+
 export const writeRecommendations = async (brandName, weekStart, suggestions) => {
   const data = await proxyFetch({ action: 'writeRecommendations', brandName, weekStart, suggestions });
   if (!data.success) throw new Error(data.error);
