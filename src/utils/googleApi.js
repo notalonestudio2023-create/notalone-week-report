@@ -76,20 +76,20 @@ export const writeAdCache = async (brandName, weekStart, adData) => {
   if (!data.success) throw new Error(data.error);
 };
 
-// 廣告類型分類
-export const AD_TYPES = {
-  'FB追蹤': row => row.includes('追蹤') && row.includes('FB'),
-  'IG追蹤': row => row.includes('追蹤') && row.includes('IG'),
-  'FB點擊': row => row.includes('點擊'),
-  'FB訊息': row => row.includes('訊息'),
-  'FB表單': row => row.includes('表單'),
-  'FB觸及': row => row.includes('觸及'),
-  'IG前台': row => row.includes('Instagram 貼文：'),
-};
+export const AD_TYPES = [
+  { key: 'FB追蹤',  match: c => c.includes('追蹤') && c.includes('FB') },
+  { key: 'IG追蹤',  match: c => c.includes('追蹤') && c.includes('IG') },
+  { key: 'FB點擊',  match: c => c.includes('點擊') },
+  { key: 'FB訊息',  match: c => c.includes('訊息') },
+  { key: 'FB表單',  match: c => c.includes('表單') },
+  { key: 'FB觸及',  match: c => c.includes('觸及') },
+  { key: 'IG前台',  match: c => c.includes('Instagram 貼文：') },
+];
 
 const STANDARDS = {
   'FB追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
   'IG追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+  'IG互動':  { excellent: 5,  standard: 15,  warning: 33  },
   'FB點擊':  { excellent: 5,  standard: 15,  warning: 33  },
   'FB訊息':  { excellent: 50, standard: 100, warning: 150 },
   'FB表單':  { excellent: 50, standard: 100, warning: 150 },
@@ -106,8 +106,22 @@ const getGrade = (type, cost) => {
   return { grade: 'danger', label: '‼️ 急救' };
 };
 
-export const parseAdData = (rows) => {
+// 依月預算判斷 IG前台 的實際類型
+const resolveIgFrontType = (budgetData) => {
+  if (!budgetData?.items) return 'IG追蹤';
+  const igItem = budgetData.items.find(item =>
+    (item.platform || '').includes('IG') || (item.platform || '').includes('ig')
+  );
+  if (!igItem) return 'IG追蹤';
+  const conv = (igItem.conv || '').toLowerCase();
+  if (conv.includes('互動')) return 'IG互動';
+  return 'IG追蹤';
+};
+
+export const parseAdData = (rows, budgetData) => {
+  const igFrontType = resolveIgFrontType(budgetData);
   const groups = {};
+
   rows.forEach(row => {
     const campaign = row['行銷活動名稱'] || '';
     const spend = parseFloat(row['花費金額 (TWD)'] || 0);
@@ -115,8 +129,11 @@ export const parseAdData = (rows) => {
     const reach = parseFloat(row['觸及人數'] || 0);
 
     let type = '其他';
-    for (const [typeName, matcher] of Object.entries(AD_TYPES)) {
-      if (matcher(campaign)) { type = typeName; break; }
+    for (const { key, match } of AD_TYPES) {
+      if (match(campaign)) {
+        type = key === 'IG前台' ? igFrontType : key;
+        break;
+      }
     }
 
     if (!groups[type]) groups[type] = { spend: 0, result: 0, reach: 0 };
