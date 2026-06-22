@@ -71,12 +71,30 @@ export const writeRecommendations = async (brandName, weekStart, suggestions) =>
   if (!data.success) throw new Error(data.error);
 };
 
+export const writeAdCache = async (brandName, weekStart, adData) => {
+  const data = await proxyFetch({ action: 'writeAdCache', brandName, weekStart, adData });
+  if (!data.success) throw new Error(data.error);
+};
+
+// 廣告類型分類
+export const AD_TYPES = {
+  'FB追蹤': row => row.includes('追蹤') && row.includes('FB'),
+  'IG追蹤': row => row.includes('追蹤') && row.includes('IG'),
+  'FB點擊': row => row.includes('點擊'),
+  'FB訊息': row => row.includes('訊息'),
+  'FB表單': row => row.includes('表單'),
+  'FB觸及': row => row.includes('觸及'),
+  'IG前台': row => row.includes('Instagram 貼文：'),
+};
+
 const STANDARDS = {
-  'Messenger': { excellent: 50, standard: 100, warning: 150 },
-  'Lead Form': { excellent: 50, standard: 100, warning: 150 },
-  '追蹤FB':   { excellent: 5,  standard: 10,  warning: 25  },
-  '追蹤IG':   { excellent: 5,  standard: 10,  warning: 25  },
-  '點擊詢問': { excellent: 5,  standard: 15,  warning: 33  }
+  'FB追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+  'IG追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+  'FB點擊':  { excellent: 5,  standard: 15,  warning: 33  },
+  'FB訊息':  { excellent: 50, standard: 100, warning: 150 },
+  'FB表單':  { excellent: 50, standard: 100, warning: 150 },
+  'FB觸及':  { excellent: 5,  standard: 15,  warning: 33  },
+  'IG前台':  { excellent: 5,  standard: 15,  warning: 33  },
 };
 
 const getGrade = (type, cost) => {
@@ -95,18 +113,18 @@ export const parseAdData = (rows) => {
     const spend = parseFloat(row['花費金額 (TWD)'] || 0);
     const result = parseFloat(row['成果'] || 0);
     const reach = parseFloat(row['觸及人數'] || 0);
-    let type = null;
-    if (campaign.includes('訊息') || campaign.includes('Messenger')) type = 'Messenger';
-    else if (campaign.includes('表單') || campaign.includes('Lead'))  type = 'Lead Form';
-    else if (campaign.includes('追蹤') && campaign.includes('FB'))    type = '追蹤FB';
-    else if (campaign.includes('追蹤') && campaign.includes('IG'))    type = '追蹤IG';
-    else if (campaign.includes('點擊') || campaign.includes('詢問'))  type = '點擊詢問';
-    else type = '其他';
+
+    let type = '其他';
+    for (const [typeName, matcher] of Object.entries(AD_TYPES)) {
+      if (matcher(campaign)) { type = typeName; break; }
+    }
+
     if (!groups[type]) groups[type] = { spend: 0, result: 0, reach: 0 };
     groups[type].spend  += spend;
     groups[type].result += result;
     groups[type].reach  += reach;
   });
+
   return Object.entries(groups)
     .filter(([type]) => type !== '其他')
     .map(([type, d]) => {
