@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { getBrandData, getAdData, parseAdData, writeRecommendations, getBudgetData, parseBudgetImage, clearBudgetData } from '../utils/googleApi';
+import { getBrandData, getAdData, parseAdData, writeRecommendations, writeAdCache, getBudgetData, parseBudgetImage, clearBudgetData } from '../utils/googleApi';
 import { generateRecommendations } from '../utils/claudeApi';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -21,15 +21,17 @@ export default function ReportPage() {
   const [budgetData, setBudgetData] = useState(null);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [activeLines, setActiveLines] = useState(new Set(['Messenger', 'Lead Form', '追蹤FB', '追蹤IG', '點擊詢問']));
+  const [activeLines, setActiveLines] = useState(new Set(['FB追蹤', 'IG追蹤', 'FB點擊', 'FB訊息', 'FB表單', 'FB觸及', 'IG前台']));
   const aiTriggered = useRef(new Set());
 
   const AD_SERIES = [
-    { key: 'Messenger', color: '#A32D2D', dash: [] },
-    { key: 'Lead Form', color: '#0F6E56', dash: [] },
-    { key: '追蹤FB',   color: '#854F0B', dash: [4, 3] },
-    { key: '追蹤IG',   color: '#1B3A6B', dash: [4, 3] },
-    { key: '點擊詢問', color: '#3B6D11', dash: [4, 3] }
+    { key: 'FB追蹤',  color: '#1B3A6B', dash: [4, 3] },
+    { key: 'IG追蹤',  color: '#854F0B', dash: [4, 3] },
+    { key: 'FB點擊',  color: '#3B6D11', dash: [4, 3] },
+    { key: 'FB訊息',  color: '#A32D2D', dash: [] },
+    { key: 'FB表單',  color: '#0F6E56', dash: [] },
+    { key: 'FB觸及',  color: '#6B3A8A', dash: [4, 3] },
+    { key: 'IG前台',  color: '#C13584', dash: [4, 3] },
   ];
 
   useEffect(() => {
@@ -49,13 +51,53 @@ export default function ReportPage() {
     setAdLoading(true);
     setBudgetData(null);
     const weekStart = selectedWeek.replace(/\//g, '-');
-    getAdData(brandId, weekStart)
-      .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
-      .catch(e => { setAdError(e.message); setAdLoading(false); });
+
+    // 先檢查 Sheets 有沒有快取
+    const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
+    const currentWeek = allData[currentIdx] || {};
+    const hasCachedAd = Object.keys(currentWeek).some(k => k.startsWith('花費_') && currentWeek[k]);
+
+    if (hasCachedAd) {
+      // 從 Sheets 快取讀取
+      const cached = [];
+      AD_SERIES.forEach(s => {
+        const spend = parseFloat(currentWeek['花費_' + s.key] || 0);
+        const result = parseFloat(currentWeek['成果_' + s.key] || 0);
+        const cost = parseFloat(currentWeek['成本_' + s.key] || 0);
+        if (spend > 0 || result > 0) {
+          cached.push({ type: s.key, spend: Math.round(spend), result: Math.round(result), cost, reach: 0, ...getGradeFromCache(s.key, cost) });
+        }
+      });
+      setAdData(cached);
+      setAdLoading(false);
+    } else {
+      getAdData(brandId, weekStart)
+        .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
+        .catch(e => { setAdError(e.message); setAdLoading(false); });
+    }
+
     getBudgetData(brandId, weekStart)
       .then(b => setBudgetData(b))
       .catch(() => setBudgetData(null));
-  }, [selectedWeek, brandId]);
+  }, [selectedWeek, brandId, allData]);
+
+  const getGradeFromCache = (type, cost) => {
+    const STANDARDS = {
+      'FB追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+      'IG追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+      'FB點擊':  { excellent: 5,  standard: 15,  warning: 33  },
+      'FB訊息':  { excellent: 50, standard: 100, warning: 150 },
+      'FB表單':  { excellent: 50, standard: 100, warning: 150 },
+      'FB觸及':  { excellent: 5,  standard: 15,  warning: 33  },
+      'IG前台':  { excellent: 5,  standard: 15,  warning: 33  },
+    };
+    const std = STANDARDS[type];
+    if (!std) return { grade: '—', label: '—' };
+    if (cost <= std.excellent) return { grade: 'excellent', label: '🚀 卓越' };
+    if (cost <= std.standard)  return { grade: 'ok',        label: '✅ 標準' };
+    if (cost <= std.warning)   return { grade: 'warn',      label: '⚠️ 警示' };
+    return { grade: 'danger', label: '‼️ 急救' };
+  };
 
   useEffect(() => {
     if (adLoading) return;
@@ -99,6 +141,7 @@ export default function ReportPage() {
         brandName: brandId, weekStart, weekEnd, adData, socialData, prevSocialData
       });
       await writeRecommendations(brandId, weekStart, result);
+      await writeAdCache(brandId, weekStart, adData);
       setAllData(prev => prev.map(d =>
         d['週期開始日'] === selectedWeek
           ? { ...d, 建議01: result[0], 建議02: result[1], 建議03: result[2] }
@@ -110,7 +153,7 @@ export default function ReportPage() {
     setAiLoading(false);
   };
 
-const handleParseBudget = async () => {
+  const handleParseBudget = async () => {
     setBudgetLoading(true);
     setBudgetData(null);
     try {
@@ -169,11 +212,11 @@ const handleParseBudget = async () => {
     labels: allData.map(d => (d['週期開始日'] || '').slice(5)),
     datasets: visibleSeries.map(s => ({
       label: s.key,
-      data: allData.map(d => parseFloat(d[`成本_${s.key}`] || 0)),
+      data: allData.map(d => parseFloat(d['成本_' + s.key] || 0)),
       borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2,
       borderDash: s.dash, pointRadius: 5, pointBackgroundColor: s.color, tension: 0.2,
       hidden: !activeLines.has(s.key),
-      yAxisID: (s.key === 'Messenger' || s.key === 'Lead Form') ? 'yH' : 'yL'
+      yAxisID: (s.key === 'FB訊息' || s.key === 'FB表單') ? 'yH' : 'yL'
     }))
   };
 
@@ -235,29 +278,16 @@ const handleParseBudget = async () => {
           <div className="budget-section-header">
             <h2 className="sec-title" style={{ marginBottom: 0 }}>月預算總覽</h2>
             {budgetData && (
-              <button
-                className="budget-refresh-btn"
-                onClick={handleClearBudget}
-                disabled={budgetLoading}
-                title="重新讀取月預算">
-                ↺
-              </button>
+              <button className="budget-refresh-btn" onClick={handleClearBudget} disabled={budgetLoading} title="重新讀取月預算">↺</button>
             )}
           </div>
-
           {!budgetData && !budgetLoading && (
             <div className="budget-empty">
               <p className="empty-hint">尚未設定本月預算</p>
-              <button className="gen-btn" onClick={handleParseBudget}>
-                讀取月預算
-              </button>
+              <button className="gen-btn" onClick={handleParseBudget}>讀取月預算</button>
             </div>
           )}
-
-          {budgetLoading && (
-            <p className="empty-hint">讀取中，請稍候...</p>
-          )}
-
+          {budgetLoading && <p className="empty-hint">讀取中，請稍候...</p>}
           {budgetData && !budgetLoading && (
             <>
               <div className="budget-header">
@@ -270,13 +300,7 @@ const handleParseBudget = async () => {
               <div className="budget-table-wrap">
                 <table className="ad-table">
                   <thead>
-                    <tr>
-                      <th>平台</th>
-                      <th>廣告目標</th>
-                      <th>轉換目標</th>
-                      <th>走期</th>
-                      <th>受眾區域</th>
-                    </tr>
+                    <tr><th>平台</th><th>廣告目標</th><th>轉換目標</th><th>走期</th><th>受眾區域</th></tr>
                   </thead>
                   <tbody>
                     {budgetData.items?.map((item, i) => (
@@ -306,9 +330,7 @@ const handleParseBudget = async () => {
                 <div key={m.label} className="metric-card">
                   <p className="metric-label">{m.label}</p>
                   <p className="metric-value">{parseInt(currentWeek[m.field] || 0).toLocaleString()}</p>
-                  <p className={`metric-growth ${growth >= 0 ? 'pos' : 'neg'}`}>
-                    {growth >= 0 ? '+' : ''}{growth} 人
-                  </p>
+                  <p className={`metric-growth ${growth >= 0 ? 'pos' : 'neg'}`}>{growth >= 0 ? '+' : ''}{growth} 人</p>
                 </div>
               );
             })}
@@ -321,21 +343,12 @@ const handleParseBudget = async () => {
           <h2 className="sec-title">本週廣告成效</h2>
           {adLoading && <p className="empty-hint">載入廣告資料中...</p>}
           {adError && <p className="empty-hint">本週廣告資料尚未上傳</p>}
-          {!adLoading && !adError && adData.length === 0 && (
-            <p className="empty-hint">本週無廣告投放資料</p>
-          )}
+          {!adLoading && !adError && adData.length === 0 && <p className="empty-hint">本週無廣告投放資料</p>}
           {!adLoading && adData.length > 0 && (
             <div className="ad-table-wrap">
               <table className="ad-table">
                 <thead>
-                  <tr>
-                    <th>廣告類型</th>
-                    <th>花費</th>
-                    <th>成果</th>
-                    <th>每次成本</th>
-                    <th>觸及人數</th>
-                    <th>評級</th>
-                  </tr>
+                  <tr><th>廣告類型</th><th>花費</th><th>成果</th><th>每次成本</th><th>觸及人數</th><th>評級</th></tr>
                 </thead>
                 <tbody>
                   {adData.map(a => (
@@ -393,9 +406,7 @@ const handleParseBudget = async () => {
               ) : null)}
             </div>
           )}
-          {!aiLoading && !hasSuggestions && (
-            <p className="empty-hint">尚未產出本週優化建議</p>
-          )}
+          {!aiLoading && !hasSuggestions && <p className="empty-hint">尚未產出本週優化建議</p>}
         </section>
 
         <footer className="report-footer">
