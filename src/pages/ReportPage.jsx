@@ -21,17 +21,17 @@ export default function ReportPage() {
   const [budgetData, setBudgetData] = useState(null);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [activeLines, setActiveLines] = useState(new Set(['FB追蹤', 'IG追蹤', 'FB點擊', 'FB訊息', 'FB表單', 'FB觸及', 'IG前台']));
+  const [activeLines, setActiveLines] = useState(new Set(['FB追蹤', 'IG追蹤', 'IG互動', 'FB點擊', 'FB訊息', 'FB表單', 'FB觸及']));
   const aiTriggered = useRef(new Set());
 
   const AD_SERIES = [
     { key: 'FB追蹤',  color: '#1B3A6B', dash: [4, 3] },
     { key: 'IG追蹤',  color: '#854F0B', dash: [4, 3] },
+    { key: 'IG互動',  color: '#C13584', dash: [4, 3] },
     { key: 'FB點擊',  color: '#3B6D11', dash: [4, 3] },
     { key: 'FB訊息',  color: '#A32D2D', dash: [] },
     { key: 'FB表單',  color: '#0F6E56', dash: [] },
     { key: 'FB觸及',  color: '#6B3A8A', dash: [4, 3] },
-    { key: 'IG前台',  color: '#C13584', dash: [4, 3] },
   ];
 
   useEffect(() => {
@@ -52,44 +52,48 @@ export default function ReportPage() {
     setBudgetData(null);
     const weekStart = selectedWeek.replace(/\//g, '-');
 
-    // 先檢查 Sheets 有沒有快取
-    const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
-    const currentWeek = allData[currentIdx] || {};
-    const hasCachedAd = Object.keys(currentWeek).some(k => k.startsWith('花費_') && currentWeek[k]);
-
-    if (hasCachedAd) {
-      // 從 Sheets 快取讀取
-      const cached = [];
-      AD_SERIES.forEach(s => {
-        const spend = parseFloat(currentWeek['花費_' + s.key] || 0);
-        const result = parseFloat(currentWeek['成果_' + s.key] || 0);
-        const cost = parseFloat(currentWeek['成本_' + s.key] || 0);
-        if (spend > 0 || result > 0) {
-          cached.push({ type: s.key, spend: Math.round(spend), result: Math.round(result), cost, reach: 0, ...getGradeFromCache(s.key, cost) });
-        }
-      });
-      setAdData(cached);
-      setAdLoading(false);
-    } else {
-      getAdData(brandId, weekStart)
-        .then(rows => { setAdData(parseAdData(rows)); setAdLoading(false); })
-        .catch(e => { setAdError(e.message); setAdLoading(false); });
-    }
-
     getBudgetData(brandId, weekStart)
-      .then(b => setBudgetData(b))
-      .catch(() => setBudgetData(null));
+      .then(b => {
+        setBudgetData(b);
+        const currentIdx = allData.findIndex(d => d['週期開始日'] === selectedWeek);
+        const currentWeek = allData[currentIdx] || {};
+        const hasCachedAd = Object.keys(currentWeek).some(k => k.startsWith('花費_') && currentWeek[k]);
+
+        if (hasCachedAd) {
+          const cached = [];
+          AD_SERIES.forEach(s => {
+            const spend = parseFloat(currentWeek['花費_' + s.key] || 0);
+            const result = parseFloat(currentWeek['成果_' + s.key] || 0);
+            const cost = parseFloat(currentWeek['成本_' + s.key] || 0);
+            if (spend > 0 || result > 0) {
+              cached.push({ type: s.key, spend: Math.round(spend), result: Math.round(result), cost, reach: 0, ...getGradeLocal(s.key, cost) });
+            }
+          });
+          setAdData(cached);
+          setAdLoading(false);
+        } else {
+          getAdData(brandId, weekStart)
+            .then(rows => { setAdData(parseAdData(rows, b)); setAdLoading(false); })
+            .catch(e => { setAdError(e.message); setAdLoading(false); });
+        }
+      })
+      .catch(() => {
+        setBudgetData(null);
+        getAdData(brandId, weekStart)
+          .then(rows => { setAdData(parseAdData(rows, null)); setAdLoading(false); })
+          .catch(e => { setAdError(e.message); setAdLoading(false); });
+      });
   }, [selectedWeek, brandId, allData]);
 
-  const getGradeFromCache = (type, cost) => {
+  const getGradeLocal = (type, cost) => {
     const STANDARDS = {
       'FB追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
       'IG追蹤':  { excellent: 5,  standard: 10,  warning: 25  },
+      'IG互動':  { excellent: 5,  standard: 15,  warning: 33  },
       'FB點擊':  { excellent: 5,  standard: 15,  warning: 33  },
       'FB訊息':  { excellent: 50, standard: 100, warning: 150 },
       'FB表單':  { excellent: 50, standard: 100, warning: 150 },
       'FB觸及':  { excellent: 5,  standard: 15,  warning: 33  },
-      'IG前台':  { excellent: 5,  standard: 15,  warning: 33  },
     };
     const std = STANDARDS[type];
     if (!std) return { grade: '—', label: '—' };
@@ -300,7 +304,7 @@ export default function ReportPage() {
               <div className="budget-table-wrap">
                 <table className="ad-table">
                   <thead>
-                    <tr><th>平台</th><th>廣告目標</th><th>轉換目標</th><th>走期</th><th>受眾區域</th></tr>
+                    <tr><th>平台</th><th>廣告目標</th><th>轉換目標</th><th>走期</th><th>受眾區域</th><th style={{textAlign:'right'}}>預算</th></tr>
                   </thead>
                   <tbody>
                     {budgetData.items?.map((item, i) => (
@@ -310,6 +314,7 @@ export default function ReportPage() {
                         <td>{item.conv}</td>
                         <td style={{ fontSize: '11px', color: 'var(--brand-sub)' }}>{item.period}</td>
                         <td style={{ fontSize: '11px', color: 'var(--brand-sub)' }}>{item.area}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 500 }}>{item.budget ? '$' + item.budget.toLocaleString() : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
